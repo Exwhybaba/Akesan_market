@@ -148,33 +148,7 @@ app.index_string = '''
                 border-color: #2c88d9;
                 box-shadow: 0 0 0 0.2rem rgba(2, 117, 216, 0.25);
             }
-            /* Receipt Print Styles */
-            @media print {
-                body * {
-                    visibility: hidden;
-                }
-                .print-receipt, .print-receipt * {
-                    visibility: visible;
-                }
-                .print-receipt {
-                    position: absolute;
-                    left: 0;
-                    top: 0;
-                    width: 80mm;
-                }
-            }
         </style>
-        <!-- Add dash_clientside for client-side callbacks -->
-        <script>
-            window.dash_clientside = Object.assign({}, window.dash_clientside, {
-                clientside: {
-                    no_update: Symbol('NO_UPDATE')
-                }
-            });
-        </script>
-        <!-- Add jsPDF library for PDF generation -->
-        <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-        <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     </head>
     <body>
         {%app_entry%}

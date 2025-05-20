@@ -136,7 +136,7 @@ layout = dbc.Container([
                 dbc.CardFooter([
                     html.Small([
                         html.I(className="fas fa-info-circle me-1"),
-                        "Total fees paid for previous years"
+                        "Total arrears payments (paid and outstanding)"
                     ], className="text-muted")
                 ], className="bg-transparent")
             ], className="mb-4 h-100 shadow-lg"),
@@ -310,7 +310,7 @@ def update_dashboard(n, start_date, end_date, payment_type, selected_block):
     
     total_collections = query.scalar() or 0
     
-    # Calculate current year (needed for advance payments)
+    # Calculate current year
     current_year = datetime.now().year
     
     # Calculate paid arrears for previous years
@@ -324,8 +324,30 @@ def update_dashboard(n, start_date, end_date, payment_type, selected_block):
     if selected_block and selected_block != "all":
         arrears_query = arrears_query.join(Vendor).filter(Vendor.block == selected_block)
     
-    # Get total arrears payments
     paid_arrears = arrears_query.scalar() or 0
+    
+    # Estimate total potential arrears (vendors * annual fee * years since establishment)
+    # This is simplified and should be adjusted based on your business logic
+    # In a real application, you would track this per vendor based on their registration date
+    annual_fee = 12000  # ₦12,000 annual fee per vendor
+    
+    # Get all vendors with block filter if applicable
+    vendor_query = get_session().query(Vendor)
+    if selected_block and selected_block != "all":
+        vendor_query = vendor_query.filter(Vendor.block == selected_block)
+    
+    # Calculate total potential arrears based on vendor registration dates
+    total_potential_arrears = 0
+    for vendor in vendor_query.all():
+        reg_year = vendor.registration_date.year
+        years_active = current_year - reg_year
+        if years_active > 0:
+            total_potential_arrears += annual_fee * years_active
+    
+    # Calculate outstanding arrears by subtracting paid arrears from total potential
+    outstanding_arrears = total_potential_arrears - paid_arrears
+    if outstanding_arrears < 0:
+        outstanding_arrears = 0  # Ensure we don't show negative arrears
     
     # Get total advance payments
     advance_query = get_session().query(func.sum(Payment.amount)).filter(
@@ -491,16 +513,15 @@ def update_dashboard(n, start_date, end_date, payment_type, selected_block):
         height=280  # Reduced height from 350 to 280
     )
     
-    # Format currency outputs
-    total_collections_formatted = f"₦{total_collections:,.2f}"
-    outstanding_arrears_formatted = f"₦{paid_arrears:,.2f}"  # Now this shows paid arrears
-    advance_payments_formatted = f"₦{advance_payments:,.2f}"
+    # Calculate total arrears payments (paid and outstanding)
+    total_arrears = paid_arrears + outstanding_arrears
+    total_arrears_formatted = f"₦{total_arrears:,.2f}"
     
     return (
         f"{total_vendors:,}",
-        total_collections_formatted,
-        outstanding_arrears_formatted,
-        advance_payments_formatted,
+        f"₦{total_collections:,.2f}",
+        total_arrears_formatted,
+        f"₦{advance_payments:,.2f}",
         trend_fig,
         status_fig,
         advance_fig,

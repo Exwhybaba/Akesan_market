@@ -1,7 +1,7 @@
 import dash
-from dash import html, dcc, Input, Output, State, callback, dash_table, ALL, callback_context
+from dash import html, dcc, Input, Output, State, callback, dash_table, ALL
 import dash_bootstrap_components as dbc
-from datetime import datetime, timedelta
+from datetime import datetime
 import uuid
 from sqlalchemy import func, extract
 from app import Vendor, Payment, Receipt, get_db, app
@@ -323,177 +323,137 @@ def update_payment_year_options(payment_type, vendor_data):
      State("payment-date", "date")]
 )
 def process_payment(n_clicks, vendor_data, payment_type, payment_year, amount, payment_date):
-    if n_clicks is None or not vendor_data or not payment_type or not payment_year or not amount:
-        raise dash.exceptions.PreventUpdate
+    if n_clicks is None or not vendor_data or not payment_type or not payment_year:
+        return "", "", "mt-4 d-none"
+    
+    # Validate payment
+    if amount <= 0:
+        return dbc.Alert("Payment amount must be greater than zero", color="danger"), "", "mt-4 d-none"
+    
+    # Check if payment for this year already exists for this vendor
+    vendor_id = vendor_data["id"]
+    existing_payment = get_session().query(Payment).filter_by(
+        vendor_id=vendor_id,
+        year=payment_year,
+        payment_type=payment_type
+    ).first()
+    
+    if existing_payment:
+        return dbc.Alert(f"Payment for {payment_year} already exists for this vendor", color="danger"), "", "mt-4 d-none"
     
     try:
-        # Parse payment details
-        amount = float(amount)
-        vendor_id = vendor_data["id"]
-        vendor_name = vendor_data["name"]
-        vendor_block = vendor_data["block"]
-        vendor_shop = vendor_data["shop_number"]
-        
-        # Parse payment date if provided
-        if payment_date:
-            try:
-                payment_date = datetime.strptime(payment_date, "%Y-%m-%d").date()
-            except:
-                # If there's any issue with parsing, use current date
-                payment_date = datetime.now().date()
-        else:
-            payment_date = datetime.now().date()
-            
-        # Generate payment time
-        payment_time = datetime.now().strftime("%H:%M:%S")
+        # Parse payment date
+        payment_date_obj = datetime.strptime(payment_date, "%Y-%m-%d").date()
+        current_time = datetime.now().strftime('%H:%M:%S')
         
         # Create payment record
         new_payment = Payment(
             vendor_id=vendor_id,
             amount=amount,
-            year=int(payment_year),
+            year=payment_year,
             payment_type=payment_type,
-            date=payment_date,
-            time=payment_time
+            date=payment_date_obj,
+            time=current_time
         )
-        
-        # Save to database
         get_session().add(new_payment)
-        get_session().flush()  # To get the payment ID
+        get_session().flush()  # Get the payment ID without committing yet
         
-        # Generate receipt number (simple format: YY-MM-DD-VENDORID-PAYMENTID)
-        receipt_number = f"{payment_date.strftime('%y%m%d')}-{vendor_id:04d}-{new_payment.id:04d}"
+        # Generate receipt number
+        receipt_number = f"OYO-{datetime.now().strftime('%Y%m%d')}-{uuid.uuid4().hex[:6].upper()}"
         
-        # Create receipt record
+        # Create receipt
         new_receipt = Receipt(
             vendor_id=vendor_id,
-            issue_date=payment_date,
+            issue_date=payment_date_obj,
             amount=amount,
-            year=int(payment_year),
+            year=payment_year,
             receipt_number=receipt_number,
             payment_id=new_payment.id
         )
-        
-        # Save to database and commit both payment and receipt
         get_session().add(new_receipt)
         get_session().commit()
         
         # Generate printable receipt
-        receipt_html = dbc.Card([
-            dbc.CardBody([
-                html.Div([
-                    # Receipt Header
-                    html.Div([
-                        html.H5("OYO EAST LOCAL GOVERNMENT", className="receipt-title mb-0"),
-                        html.H6("MARKET MANAGEMENT SYSTEM", className="mb-3"),
-                        html.Div([
-                            html.Strong("OFFICIAL RECEIPT", className="d-block"),
-                            html.Small(f"Receipt #: {receipt_number}", className="receipt-number d-block"),
-                            html.Small(f"Date: {payment_date.strftime('%d-%b-%Y')} | Time: {payment_time}", className="d-block"),
-                        ]),
-                    ], className="text-center receipt-header"),
-                    
-                    # Vendor Details
-                    html.Div([
-                        html.Strong("VENDOR DETAILS", className="d-block mb-2"),
-                        html.Div([
-                            html.Div([
-                                html.Span("Name: ", className="font-weight-bold"),
-                                html.Span(vendor_name)
-                            ], className="mb-1"),
-                            html.Div([
-                                html.Span("Shop: ", className="font-weight-bold"),
-                                html.Span(vendor_shop)
-                            ], className="mb-1"),
-                            html.Div([
-                                html.Span("Block: ", className="font-weight-bold"),
-                                html.Span(vendor_block)
-                            ]),
-                        ])
-                    ], className="my-3 py-2 vendor-details"),
-                    
-                    # Payment Details
-                    html.Div([
-                        html.Strong("PAYMENT DETAILS", className="d-block mb-2"),
-                        html.Table([
-                            html.Thead([
-                                html.Tr([
-                                    html.Th("Description", style={"width": "50%"}),
-                                    html.Th("Year", style={"width": "25%"}),
-                                    html.Th("Amount", style={"width": "25%", "text-align": "right"}),
-                                ])
-                            ]),
-                            html.Tbody([
-                                html.Tr([
-                                    html.Td(f"Market Fee ({payment_type.title()})"),
-                                    html.Td(f"{payment_year}"),
-                                    html.Td(f"₦{amount:,.2f}", style={"text-align": "right"}),
-                                ]),
-                                html.Tr([
-                                    html.Td("Total", className="font-weight-bold"),
-                                    html.Td(""),
-                                    html.Td(f"₦{amount:,.2f}", style={"text-align": "right", "font-weight": "bold"}),
-                                ]),
-                            ])
-                        ], className="table table-sm table-bordered payment-details"),
+        receipt_html = html.Div([
+            dbc.Card([
+                dbc.CardHeader([
+                    html.H3("Payment Receipt", className="text-center"),
+                    html.H5("Oyo East Local Government", className="text-center"),
+                ]),
+                dbc.CardBody([
+                    dbc.Row([
+                        dbc.Col([
+                            html.P(f"Receipt #: {receipt_number}", className="font-weight-bold"),
+                            html.P(f"Date: {payment_date_obj.strftime('%d-%m-%Y')}"),
+                        ], width=6),
+                        dbc.Col([
+                            html.P(f"Vendor: {vendor_data['name']}", className="font-weight-bold"),
+                            html.P(f"Shop: {vendor_data['shop_number']}, Block: {vendor_data['block']}"),
+                        ], width=6),
                     ]),
-                    
-                    # Signature Area
-                    html.Div([
-                        html.Div([
+                    dbc.Row([
+                        dbc.Col([
+                            html.Table([
+                                html.Thead([
+                                    html.Tr([
+                                        html.Th("Description", style={"width": "60%"}),
+                                        html.Th("Year", style={"width": "20%"}),
+                                        html.Th("Amount", style={"width": "20%", "text-align": "right"}),
+                                    ])
+                                ]),
+                                html.Tbody([
+                                    html.Tr([
+                                        html.Td(f"Market Fee ({payment_type.title()})"),
+                                        html.Td(f"{payment_year}"),
+                                        html.Td(f"₦{amount:,.2f}", style={"text-align": "right"}),
+                                    ]),
+                                    html.Tr([
+                                        html.Td("Total", className="font-weight-bold"),
+                                        html.Td(""),
+                                        html.Td(f"₦{amount:,.2f}", style={"text-align": "right", "font-weight": "bold"}),
+                                    ]),
+                                ])
+                            ], className="table table-bordered"),
+                        ])
+                    ]),
+                    dbc.Row([
+                        dbc.Col([
                             html.Div([
-                                html.P("____________________________", className="mb-1"),
-                                html.P("Authorized Signature", className="signature-line"),
-                            ], className="text-center"),
-                        ], className="col-6"),
-                        html.Div([
+                                html.P("Authorized Signature", className="border-top mt-5 pt-2 text-center"),
+                            ], className="mt-4"),
+                        ], width=6),
+                        dbc.Col([
                             html.Div([
-                                html.P("____________________________", className="mb-1"),
-                                html.P("Vendor Signature", className="signature-line"),
-                            ], className="text-center"),
-                        ], className="col-6"),
-                    ], className="row signature-area mt-4"),
-                ], id="receipt-content", className="print-receipt"),
-                
+                                html.P("Vendor Signature", className="border-top mt-5 pt-2 text-center"),
+                            ], className="mt-4"),
+                        ], width=6),
+                    ]),
+                ]),
                 dbc.CardFooter([
                     dbc.Row([
                         dbc.Col([
-                            dbc.Button("Export as PDF", id="print-receipt-btn", color="primary", className="mr-2"),
+                            dbc.Button("Print Receipt", id="print-receipt-btn", color="primary", className="mr-2"),
                         ], width={"size": 6, "offset": 3}, className="text-center"),
                     ]),
                 ]),
-            ]),
+            ], className="print-receipt"),
+            # Client-side printing functionality
+            html.Div(id="print-trigger", style={"display": "none"}),
+            html.Script("""
+                function printReceipt() {
+                    const printContents = document.querySelector('.print-receipt').innerHTML;
+                    const originalContents = document.body.innerHTML;
+                    document.body.innerHTML = printContents;
+                    window.print();
+                    document.body.innerHTML = originalContents;
+                }
+            """)
         ])
         
         return dbc.Alert("Payment processed successfully!", color="success"), receipt_html, "mt-4"
     except Exception as e:
         get_session().rollback()
         return dbc.Alert(f"Error processing payment: {str(e)}", color="danger"), "", "mt-4 d-none"
-
-# Use our external print receipt JS function
-app.clientside_callback(
-    """
-    function(n_clicks) {
-        if (n_clicks) {
-            // Use the external function defined in print_receipt.js
-            if (window.printReceipt) {
-                window.printReceipt('receipt-content');
-            } else {
-                console.error('printReceipt function not found. Check that print_receipt.js is loaded.');
-            }
-            return null;
-        }
-        return window.dash_clientside.no_update;
-    }
-    """,
-    Output("print-trigger", "children"),
-    Input("print-receipt-btn", "n_clicks"),
-    prevent_initial_call=True
-)
-
-# Add a hidden div for print trigger if it doesn't exist
-if not any(isinstance(child, html.Div) and getattr(child, 'id', None) == 'print-trigger' for child in layout.children):
-    layout.children.append(html.Div(id="print-trigger", style={"display": "none"}))
 
 # Callback to update payment history table
 @callback(
@@ -647,6 +607,17 @@ def export_payments_csv(n_clicks):
     df = pd.DataFrame(data)
     
     return dcc.send_data_frame(df.to_csv, "payment_history.csv", index=False)
+
+# Add callback for print button
+@callback(
+    Output("print-trigger", "children"),
+    Input("print-receipt-btn", "n_clicks"),
+    prevent_initial_call=True
+)
+def trigger_print(n_clicks):
+    if n_clicks:
+        return html.Script("printReceipt();")
+    return dash.no_update
 
 # Add JavaScript for dynamically adding event listeners to delete buttons
 layout.children.append(html.Div([

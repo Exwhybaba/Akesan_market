@@ -53,7 +53,12 @@ layout = dbc.Container([
                                 options=[
                                     {"label": "Seyi Makinde", "value": "Seyi Makinde"},
                                     {"label": "Oba Adeyemi", "value": "Oba Adeyemi"},
-                                    {"label": "Alaja Monsurat", "value": "Alaja Monsurat"}
+                                    {"label": "Olu Afolabi", "value": "Olu Afolabi"},
+                                    {"label": "Block A Open Stall", "value": "Block A Open Stall"},
+                                    {"label": "Block B Open Stall", "value": "Block B Open Stall"},
+                                    {"label": "Block C Open Stall", "value": "Block C Open Stall"},
+                                    {"label": "Open Market", "value": "Open Market"},
+                                    {"label": "Making Shift", "value": "Making Shift"}
                                 ],
                                 placeholder="Select block",
                                 clearable=True,
@@ -118,7 +123,13 @@ layout = dbc.Container([
                                         {"label": "All Blocks", "value": ""},
                                         {"label": "Seyi Makinde", "value": "Seyi Makinde"},
                                         {"label": "Oba Adeyemi", "value": "Oba Adeyemi"},
-                                        {"label": "Alaja Monsurat", "value": "Alaja Monsurat"}
+                                        {"label": "Olu Afolabi", "value": "Olu Afolabi"},
+                                        {"label": "Block A Open Stall", "value": "Block A Open Stall"},
+                                        {"label": "Block B Open Stall", "value": "Block B Open Stall"},
+                                        {"label": "Block C Open Stall", "value": "Block C Open Stall"},
+                                        {"label": "Open Market", "value": "Open Market"},
+                                        {"label": "Making Shift", "value": "Making Shift"}
+
                                     ],
                                     value=None,
                                     className="w-100"
@@ -327,11 +338,17 @@ def update_vendor_table(search_term, block_filter, refresh_trigger):
         {"label": "All Blocks", "value": ""},
         {"label": "Seyi Makinde", "value": "Seyi Makinde"},
         {"label": "Oba Adeyemi", "value": "Oba Adeyemi"},
-        {"label": "Alaja Monsurat", "value": "Alaja Monsurat"}
+        {"label": "Olu Afolabi", "value": "Olu Afolabi"},
+        {"label": "Block A Open Stall", "value": "Block A Open Stall"},
+        {"label": "Block B Open Stall", "value": "Block B Open Stall"},
+        {"label": "Block C Open Stall", "value": "Block C Open Stall"},
+        {"label": "Open Market", "value": "Open Market"},
+        {"label": "Making Shift", "value": "Making Shift"}
     ]
+
     
     # Add any additional blocks from the database that aren't in our predefined list
-    existing_block_values = ["", "Seyi Makinde", "Oba Adeyemi", "Alaja Monsurat"]
+    existing_block_values = ["", "Seyi Makinde", "Oba Adeyemi", "Olu Afolabi"]
     for block in blocks:
         if block[0] and block[0] not in existing_block_values:
             block_options.append({"label": block[0], "value": block[0]})

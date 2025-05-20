@@ -468,4 +468,69 @@ def export_closing_csv(n_clicks, closing_data):
     closing = get_session().query(DailyClosing).get(closing_data["id"])
     filename = f"closing_{closing.date.strftime('%Y%m%d')}.csv"
     
-    return dcc.send_data_frame(df.to_csv, filename, index=False) 
+    return dcc.send_data_frame(df.to_csv, filename, index=False)
+
+# Use our external print receipt JS function
+app.clientside_callback(
+    """
+    function(n_clicks) {
+        if (n_clicks) {
+            // Use the external function defined in print_receipt.js
+            if (window.printReceipt) {
+                window.printReceipt('receipt-content');
+            } else {
+                console.error('printReceipt function not found. Check that print_receipt.js is loaded.');
+            }
+            return null;
+        }
+        return window.dash_clientside.no_update;
+    }
+    """,
+    Output("print-trigger", "children"),
+    Input("print-receipt-btn", "n_clicks"),
+    prevent_initial_call=True
+)
+
+# Add JavaScript for dynamically adding event listeners to delete buttons
+layout.children.append(html.Div([
+    html.Script('''
+    document.addEventListener('DOMContentLoaded', function() {
+        // Function to set up delete button event listeners
+        function setupDeleteButtons() {
+            document.querySelectorAll('[id^="delete-"]').forEach(function(button) {
+                button.addEventListener('click', function() {
+                    const paymentId = this.dataset.id;
+                    if(confirm('Are you sure you want to delete this payment record?')) {
+                        // Trigger the callback for this specific button
+                        const triggerObj = {
+                            type: 'delete-btn',
+                            index: parseInt(paymentId)
+                        };
+                        
+                        // Create a custom event that Dash callbacks listen for
+                        const event = new CustomEvent('dash-callback-triggered', {
+                            detail: {
+                                id: JSON.stringify(triggerObj),
+                                prop: 'n_clicks',
+                                value: 1
+                            }
+                        });
+                        document.dispatchEvent(event);
+                    }
+                });
+            });
+        }
+        
+        // Set up initial buttons
+        setupDeleteButtons();
+        
+        // Set up a mutation observer to watch for new buttons being added to the table
+        const observer = new MutationObserver(function(mutations) {
+            setupDeleteButtons();
+        });
+        
+        // Start observing the document body for changes
+        observer.observe(document.body, { childList: true, subtree: true });
+    });
+    ''')
+])) 
