@@ -323,13 +323,24 @@ def update_payment_year_options(payment_type, vendor_data):
      State("payment-date", "date")]
 )
 def process_payment(n_clicks, vendor_data, payment_type, payment_year, amount, payment_date):
-    if n_clicks is None or not vendor_data or not payment_type or not payment_year:
-        return "", "", "mt-4 d-none"
+    if n_clicks is None or not vendor_data or not payment_type or amount is None or payment_date is None:
+        # Changed initial check to be more precise about required fields
+        return "", "", "mt-4 d-none" # Prevent initial call or calls with incomplete data
     
-    # Validate payment
+    # Validate payment amount
     if amount <= 0:
         return dbc.Alert("Payment amount must be greater than zero", color="danger"), "", "mt-4 d-none"
     
+    # --- Explicit Year Validation and Conversion ---
+    if payment_year is None:
+        return dbc.Alert("Payment year is required", color="danger"), "", "mt-4 d-none"
+
+    try:
+        payment_year = int(payment_year)
+    except (ValueError, TypeError):
+        return dbc.Alert("Invalid year format", color="danger"), "", "mt-4 d-none"
+    # --- End of Year Validation ---
+
     # Check if payment for this year already exists for this vendor
     vendor_id = vendor_data["id"]
     existing_payment = get_session().query(Payment).filter_by(
@@ -350,7 +361,7 @@ def process_payment(n_clicks, vendor_data, payment_type, payment_year, amount, p
         new_payment = Payment(
             vendor_id=vendor_id,
             amount=amount,
-            year=payment_year,
+            year=payment_year,  # Use the validated and converted integer year
             payment_type=payment_type,
             date=payment_date_obj,
             time=current_time
@@ -366,7 +377,7 @@ def process_payment(n_clicks, vendor_data, payment_type, payment_year, amount, p
             vendor_id=vendor_id,
             issue_date=payment_date_obj,
             amount=amount,
-            year=payment_year,
+            year=payment_year, # Use the validated and converted integer year
             receipt_number=receipt_number,
             payment_id=new_payment.id
         )
@@ -453,6 +464,9 @@ def process_payment(n_clicks, vendor_data, payment_type, payment_year, amount, p
         return dbc.Alert("Payment processed successfully!", color="success"), receipt_html, "mt-4"
     except Exception as e:
         get_session().rollback()
+        # Log the error for debugging
+        import traceback
+        traceback.print_exc()
         return dbc.Alert(f"Error processing payment: {str(e)}", color="danger"), "", "mt-4 d-none"
 
 # Callback to update payment history table

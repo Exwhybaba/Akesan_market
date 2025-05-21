@@ -3,7 +3,7 @@ from dash import html, dcc, Input, Output, State, callback, dash_table
 import dash_bootstrap_components as dbc
 from datetime import datetime, timedelta
 from sqlalchemy import func, extract
-from app import DailyClosing, Payment, Receipt, Vendor, get_db
+from app import DailyClosing, Payment, Receipt, Vendor, get_db, app
 import pandas as pd
 import plotly.express as px
 from flask import current_app
@@ -15,7 +15,7 @@ def get_session():
 # Daily closing page layout
 layout = dbc.Container([
     dbc.Row([
-        html.H2("Daily Closing", className="mb-4"),
+        dbc.Col(html.H2("Daily Closing", className="mb-4 text-center"), width=12)
     ]),
     
     # Daily closing form
@@ -33,8 +33,9 @@ layout = dbc.Container([
                                 max_date_allowed=datetime.now(),
                                 initial_visible_month=datetime.now(),
                                 date=datetime.now().date(),
+                                className="w-100"
                             ),
-                        ], width=6),
+                        ], xs=12, md=6),
                     ]),
                     
                     dbc.Row([
@@ -476,10 +477,10 @@ app.clientside_callback(
     function(n_clicks) {
         if (n_clicks) {
             // Use the external function defined in print_receipt.js
-            if (window.printReceipt) {
-                window.printReceipt('receipt-content');
+            if (window.printClosingReport) {
+                window.printClosingReport();
             } else {
-                console.error('printReceipt function not found. Check that print_receipt.js is loaded.');
+                console.error('printClosingReport function not found. Check that the script is loaded.');
             }
             return null;
         }
@@ -487,7 +488,7 @@ app.clientside_callback(
     }
     """,
     Output("print-trigger", "children"),
-    Input("print-receipt-btn", "n_clicks"),
+    Input("print-closing-btn", "n_clicks"),
     prevent_initial_call=True
 )
 

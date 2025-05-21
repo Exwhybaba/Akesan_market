@@ -3,9 +3,10 @@ from dash import html, dcc, Input, Output, State, callback, dash_table, callback
 import dash_bootstrap_components as dbc
 from datetime import datetime, timedelta
 from sqlalchemy import func
-from app import Vendor, get_db
+from app import Vendor, get_db, Payment, Receipt
 import pandas as pd
 import random
+import uuid
 
 # Get db reference using the function from app.py
 def get_session():
@@ -41,11 +42,11 @@ layout = dbc.Container([
                         dbc.Col([
                             dbc.Label("Vendor Name"),
                             dbc.Input(id="vendor-name", type="text", placeholder="Enter vendor name", className="mb-3"),
-                        ], width=6),
+                        ], xs=12, sm=6, md=6),
                         dbc.Col([
                             dbc.Label("Shop Number"),
                             dbc.Input(id="shop-number", type="text", placeholder="Enter shop number", className="mb-3"),
-                        ], width=3),
+                        ], xs=12, sm=6, md=3),
                         dbc.Col([
                             dbc.Label("Block"),
                             dcc.Dropdown(

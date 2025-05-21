@@ -195,7 +195,7 @@ class Payment(Base):
     __tablename__ = 'payments'
     
     id = Column(Integer, primary_key=True)
-    vendor_id = Column(Integer, ForeignKey('vendors.id'), nullable=False)
+    vendor_id = Column(Integer, ForeignKey('vendors.id', ondelete='CASCADE'), nullable=False)
     amount = Column(Float, nullable=False)
     year = Column(Integer, nullable=False)
     payment_type = Column(String(20), nullable=False)  # regular, arrears, advance
