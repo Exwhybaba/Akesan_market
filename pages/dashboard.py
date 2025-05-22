@@ -222,7 +222,8 @@ layout = dbc.Container([
     dcc.Interval(
         id='interval-component',
         interval=60*1000,  # in milliseconds (1 minute)
-        n_intervals=0
+        n_intervals=0,
+        disabled=True
     ),
     
     # Hidden components for compatibility with other pages
@@ -270,260 +271,277 @@ layout = dbc.Container([
      Input("date-filter", "start_date"),
      Input("date-filter", "end_date"),
      Input("payment-type-filter", "value"),
-     Input("block-filter", "value")],
+     Input("block-filter", "value"),
+     Input("refresh-payment-history", "data")],
     prevent_initial_call='initial_duplicate'
 )
-def update_dashboard(n, start_date, end_date, payment_type, selected_block):
-    # Get blocks for dropdown options
-    blocks = get_session().query(Vendor.block).distinct().all()
-    block_options = [{"label": "All", "value": "all"}] + [{"label": block[0], "value": block[0]} for block in blocks]
-    
-    # Apply date filter if provided
-    if start_date and end_date:
-        start_date = datetime.strptime(start_date, '%Y-%m-%d').date()
-        end_date = datetime.strptime(end_date, '%Y-%m-%d').date()
-    else:
-        start_date = (datetime.now() - timedelta(days=30)).date()
-        end_date = datetime.now().date()
-    
-    # Get total number of vendors (apply block filter if selected)
-    if selected_block and selected_block != "all":
-        total_vendors = get_session().query(func.count(Vendor.id)).filter(
-            Vendor.block == selected_block
-        ).scalar() or 0
-    else:
-        total_vendors = get_session().query(func.count(Vendor.id)).scalar() or 0
-    
-    # Get total collections (all payments made)
-    query = get_session().query(func.sum(Payment.amount)).filter(
-        Payment.date >= start_date,
-        Payment.date <= end_date
-    )
-    
-    # Apply payment type filter if not "all"
-    if payment_type and payment_type != "all":
-        query = query.filter(Payment.payment_type == payment_type)
-    
-    # Apply block filter if selected
-    if selected_block and selected_block != "all":
-        query = query.join(Vendor).filter(Vendor.block == selected_block)
-    
-    total_collections = query.scalar() or 0
-    
-    # Calculate current year
-    current_year = datetime.now().year
-    
-    # Calculate paid arrears for previous years
-    arrears_query = get_session().query(func.sum(Payment.amount)).filter(
-        Payment.payment_type == 'arrears',
-        Payment.date >= start_date,
-        Payment.date <= end_date
-    )
-    
-    # Apply block filter if selected
-    if selected_block and selected_block != "all":
-        arrears_query = arrears_query.join(Vendor).filter(Vendor.block == selected_block)
-    
-    paid_arrears = arrears_query.scalar() or 0
-    
-    # Estimate total potential arrears (vendors * annual fee * years since establishment)
-    # This is simplified and should be adjusted based on your business logic
-    # In a real application, you would track this per vendor based on their registration date
-    annual_fee = 12000  # ₦12,000 annual fee per vendor
-    
-    # Get all vendors with block filter if applicable
-    vendor_query = get_session().query(Vendor)
-    if selected_block and selected_block != "all":
-        vendor_query = vendor_query.filter(Vendor.block == selected_block)
-    
-    # Calculate total potential arrears based on vendor registration dates
-    total_potential_arrears = 0
-    for vendor in vendor_query.all():
-        reg_year = vendor.registration_date.year
-        years_active = current_year - reg_year
-        if years_active > 0:
-            total_potential_arrears += annual_fee * years_active
-    
-    # Calculate outstanding arrears by subtracting paid arrears from total potential
-    outstanding_arrears = total_potential_arrears - paid_arrears
-    if outstanding_arrears < 0:
-        outstanding_arrears = 0  # Ensure we don't show negative arrears
-    
-    # Get total advance payments
-    advance_query = get_session().query(func.sum(Payment.amount)).filter(
-        Payment.payment_type == 'advance',
-        Payment.date >= start_date,
-        Payment.date <= end_date
-    )
-    
-    # Apply block filter if selected
-    if selected_block and selected_block != "all":
-        advance_query = advance_query.join(Vendor).filter(Vendor.block == selected_block)
-    
-    advance_payments = advance_query.scalar() or 0
-    
-    # Create payment trends chart (for selected date range)
-    payment_trends = get_session().query(
-        func.strftime('%Y-%m-%d', Payment.date).label('date'),
-        func.sum(Payment.amount).label('amount')
-    ).filter(
-        Payment.date >= start_date,
-        Payment.date <= end_date
-    )
-    
-    # Apply payment type filter if not "all"
-    if payment_type and payment_type != "all":
-        payment_trends = payment_trends.filter(Payment.payment_type == payment_type)
-    
-    # Apply block filter if selected
-    if selected_block and selected_block != "all":
-        payment_trends = payment_trends.join(Vendor).filter(Vendor.block == selected_block)
-    
-    # Group by date and get results
-    payment_trends = payment_trends.group_by(func.strftime('%Y-%m-%d', Payment.date)).all()
-    
-    # Convert to DataFrame for Plotly
-    df_trends = pd.DataFrame(payment_trends, columns=['date', 'amount'])
-    
-    # Create a complete range of dates in the selected period
-    all_dates = pd.date_range(start=start_date, end=end_date, freq='D')
-    all_dates_df = pd.DataFrame({'date': all_dates.strftime('%Y-%m-%d')})
-    
-    # Merge with actual data to fill in missing dates
-    df_trends = pd.merge(all_dates_df, df_trends, on='date', how='left').fillna(0)
-    
-    # Create trend chart
-    trend_fig = px.bar(
-        df_trends, 
-        x='date', 
-        y='amount',
-        title="Payment Collections",
-        labels={'date': 'Date', 'amount': 'Amount (₦)'},
-        text_auto='.2s',
-        color_discrete_sequence=['#2c88d9']  # Blue theme color
-    )
-    trend_fig.update_layout(
-        xaxis_tickangle=-45,
-        plot_bgcolor='rgba(0,0,0,0)',
-        paper_bgcolor='rgba(0,0,0,0)',
-        yaxis_gridcolor='rgba(0, 0, 0, 0.1)',
-        xaxis_gridcolor='rgba(0, 0, 0, 0.1)',
-        font=dict(color='#333'),
-        margin=dict(l=40, r=40, t=60, b=80),
-        height=280  # Reduced height from 350 to 280
-    )
-    
-    # Create payment status chart
-    status_query = get_session().query(
-        Payment.payment_type,
-        func.count(Payment.id).label('count')
-    ).filter(
-        Payment.date >= start_date,
-        Payment.date <= end_date
-    )
-    
-    # Apply block filter if selected
-    if selected_block and selected_block != "all":
-        status_query = status_query.join(Vendor).filter(Vendor.block == selected_block)
-    
-    status_query = status_query.group_by(Payment.payment_type).all()
-    
-    # Convert to a proper format for the chart
-    status_dict = {status: 0 for status in ['regular', 'arrears', 'advance']}
-    for payment_type, count in status_query:
-        if payment_type in status_dict:
-            status_dict[payment_type] = count
-    
-    status_data = {
-        'Status': ['Regular', 'Arrears', 'Advance'],
-        'Count': [
-            status_dict['regular'],
-            status_dict['arrears'],
-            status_dict['advance']
-        ]
-    }
-    df_status = pd.DataFrame(status_data)
-    
-    status_fig = px.pie(
-        df_status, 
-        names='Status', 
-        values='Count',
-        color='Status',
-        color_discrete_map={
-            'Regular': '#28a745',  # Success green
-            'Arrears': '#ffc107',  # Warning yellow
-            'Advance': '#2c88d9'   # Info blue
-        },
-        hole=0.4
-    )
-    status_fig.update_layout(
-        legend=dict(
-            orientation="h",
-            yanchor="bottom",
-            y=-0.3,
-            xanchor="center",
-            x=0.5,
-            font=dict(color='#333')
-        ),
-        font=dict(color='#333'),
-        paper_bgcolor='rgba(0,0,0,0)',
-        margin=dict(l=40, r=40, t=60, b=100),
-        height=280  # Reduced height from 350 to 280
-    )
-    
-    # Create advance payment distribution chart
-    advance_data = get_session().query(
-        Payment.year,
-        func.sum(Payment.amount).label('amount')
-    ).filter(
-        Payment.payment_type == 'advance',
-        Payment.year > current_year,
-        Payment.date >= start_date,
-        Payment.date <= end_date
-    )
-    
-    # Apply block filter if selected
-    if selected_block and selected_block != "all":
-        advance_data = advance_data.join(Vendor).filter(Vendor.block == selected_block)
-    
-    advance_data = advance_data.group_by(Payment.year).all()
-    
-    df_advance = pd.DataFrame(advance_data, columns=['year', 'amount'])
-    
-    advance_fig = px.bar(
-        df_advance,
-        x='year',
-        y='amount',
-        title='Advance Payments by Future Year',
-        labels={'year': 'Year', 'amount': 'Amount (₦)'},
-        text_auto=True,
-        color_discrete_sequence=['#2c88d9']  # Blue color
-    )
-    advance_fig.update_layout(
-        xaxis=dict(
-            tickmode='linear',
-            dtick=1
-        ),
-        plot_bgcolor='rgba(0,0,0,0)',
-        paper_bgcolor='rgba(0,0,0,0)',
-        yaxis_gridcolor='rgba(0, 0, 0, 0.1)',
-        xaxis_gridcolor='rgba(0, 0, 0, 0.1)',
-        font=dict(color='#333'),
-        margin=dict(l=40, r=40, t=60, b=60),
-        height=280  # Reduced height from 350 to 280
-    )
-    
-    # Calculate total arrears payments (paid and outstanding)
-    total_arrears = paid_arrears + outstanding_arrears
-    total_arrears_formatted = f"₦{total_arrears:,.2f}"
-    
-    return (
-        f"{total_vendors:,}",
-        f"₦{total_collections:,.2f}",
-        total_arrears_formatted,
-        f"₦{advance_payments:,.2f}",
-        trend_fig,
-        status_fig,
-        advance_fig,
-        block_options
-    ) 
+def update_dashboard(n, start_date, end_date, payment_type, selected_block, refresh_data):
+    try:
+        # Get blocks for dropdown options
+        blocks = get_session().query(Vendor.block).distinct().all()
+        block_options = [{"label": "All", "value": "all"}] + [{"label": block[0], "value": block[0]} for block in blocks]
+        
+        # Apply date filter if provided
+        if start_date and end_date:
+            start_date = datetime.strptime(start_date, '%Y-%m-%d').date()
+            end_date = datetime.strptime(end_date, '%Y-%m-%d').date()
+        else:
+            start_date = (datetime.now() - timedelta(days=30)).date()
+            end_date = datetime.now().date()
+        
+        # Get total number of vendors (apply block filter if selected)
+        if selected_block and selected_block != "all":
+            total_vendors = get_session().query(func.count(Vendor.id)).filter(
+                Vendor.block == selected_block
+            ).scalar() or 0
+        else:
+            total_vendors = get_session().query(func.count(Vendor.id)).scalar() or 0
+        
+        # Get total collections (all payments made)
+        query = get_session().query(func.sum(Payment.amount)).filter(
+            Payment.date >= start_date,
+            Payment.date <= end_date
+        )
+        
+        # Apply payment type filter if not "all"
+        if payment_type and payment_type != "all":
+            query = query.filter(Payment.payment_type == payment_type)
+        
+        # Apply block filter if selected
+        if selected_block and selected_block != "all":
+            query = query.join(Vendor).filter(Vendor.block == selected_block)
+        
+        total_collections = query.scalar() or 0
+        
+        # Calculate current year
+        current_year = datetime.now().year
+        
+        # Calculate paid arrears for previous years
+        arrears_query = get_session().query(func.sum(Payment.amount)).filter(
+            Payment.payment_type == 'arrears',
+            Payment.date >= start_date,
+            Payment.date <= end_date
+        )
+        
+        # Apply block filter if selected
+        if selected_block and selected_block != "all":
+            arrears_query = arrears_query.join(Vendor).filter(Vendor.block == selected_block)
+        
+        paid_arrears = arrears_query.scalar() or 0
+        
+        # Estimate total potential arrears (vendors * annual fee * years since establishment)
+        # This is simplified and should be adjusted based on your business logic
+        # In a real application, you would track this per vendor based on their registration date
+        annual_fee = 12000  # ₦12,000 annual fee per vendor
+        
+        # Get all vendors with block filter if applicable
+        vendor_query = get_session().query(Vendor)
+        if selected_block and selected_block != "all":
+            vendor_query = vendor_query.filter(Vendor.block == selected_block)
+        
+        # Calculate total potential arrears based on vendor registration dates
+        total_potential_arrears = 0
+        for vendor in vendor_query.all():
+            reg_year = vendor.registration_date.year
+            years_active = current_year - reg_year
+            if years_active > 0:
+                total_potential_arrears += annual_fee * years_active
+        
+        # Calculate outstanding arrears by subtracting paid arrears from total potential
+        outstanding_arrears = total_potential_arrears - paid_arrears
+        if outstanding_arrears < 0:
+            outstanding_arrears = 0  # Ensure we don't show negative arrears
+        
+        # Get total advance payments
+        advance_query = get_session().query(func.sum(Payment.amount)).filter(
+            Payment.payment_type == 'advance',
+            Payment.date >= start_date,
+            Payment.date <= end_date
+        )
+        
+        # Apply block filter if selected
+        if selected_block and selected_block != "all":
+            advance_query = advance_query.join(Vendor).filter(Vendor.block == selected_block)
+        
+        advance_payments = advance_query.scalar() or 0
+        
+        # Create payment trends chart (for selected date range)
+        payment_trends = get_session().query(
+            func.strftime('%Y-%m-%d', Payment.date).label('date'),
+            func.sum(Payment.amount).label('amount')
+        ).filter(
+            Payment.date >= start_date,
+            Payment.date <= end_date
+        )
+        
+        # Apply payment type filter if not "all"
+        if payment_type and payment_type != "all":
+            payment_trends = payment_trends.filter(Payment.payment_type == payment_type)
+        
+        # Apply block filter if selected
+        if selected_block and selected_block != "all":
+            payment_trends = payment_trends.join(Vendor).filter(Vendor.block == selected_block)
+        
+        # Group by date and get results
+        payment_trends = payment_trends.group_by(func.strftime('%Y-%m-%d', Payment.date)).all()
+        
+        # Convert to DataFrame for Plotly
+        df_trends = pd.DataFrame(payment_trends, columns=['date', 'amount'])
+        
+        # Create a complete range of dates in the selected period
+        all_dates = pd.date_range(start=start_date, end=end_date, freq='D')
+        all_dates_df = pd.DataFrame({'date': all_dates.strftime('%Y-%m-%d')})
+        
+        # Merge with actual data to fill in missing dates
+        df_trends = pd.merge(all_dates_df, df_trends, on='date', how='left').fillna(0)
+        
+        # Create trend chart
+        trend_fig = px.bar(
+            df_trends, 
+            x='date', 
+            y='amount',
+            title="Payment Collections",
+            labels={'date': 'Date', 'amount': 'Amount (₦)'},
+            text_auto='.2s',
+            color_discrete_sequence=['#2c88d9']  # Blue theme color
+        )
+        trend_fig.update_layout(
+            xaxis_tickangle=-45,
+            plot_bgcolor='rgba(0,0,0,0)',
+            paper_bgcolor='rgba(0,0,0,0)',
+            yaxis_gridcolor='rgba(0, 0, 0, 0.1)',
+            xaxis_gridcolor='rgba(0, 0, 0, 0.1)',
+            font=dict(color='#333'),
+            margin=dict(l=40, r=40, t=60, b=80),
+            height=280  # Reduced height from 350 to 280
+        )
+        
+        # Create payment status chart
+        status_query = get_session().query(
+            Payment.payment_type,
+            func.count(Payment.id).label('count')
+        ).filter(
+            Payment.date >= start_date,
+            Payment.date <= end_date
+        )
+        
+        # Apply block filter if selected
+        if selected_block and selected_block != "all":
+            status_query = status_query.join(Vendor).filter(Vendor.block == selected_block)
+        
+        status_query = status_query.group_by(Payment.payment_type).all()
+        
+        # Convert to a proper format for the chart
+        status_dict = {status: 0 for status in ['regular', 'arrears', 'advance']}
+        for payment_type, count in status_query:
+            if payment_type in status_dict:
+                status_dict[payment_type] = count
+        
+        status_data = {
+            'Status': ['Regular', 'Arrears', 'Advance'],
+            'Count': [
+                status_dict['regular'],
+                status_dict['arrears'],
+                status_dict['advance']
+            ]
+        }
+        df_status = pd.DataFrame(status_data)
+        
+        status_fig = px.pie(
+            df_status, 
+            names='Status', 
+            values='Count',
+            color='Status',
+            color_discrete_map={
+                'Regular': '#28a745',  # Success green
+                'Arrears': '#ffc107',  # Warning yellow
+                'Advance': '#2c88d9'   # Info blue
+            },
+            hole=0.4
+        )
+        status_fig.update_layout(
+            legend=dict(
+                orientation="h",
+                yanchor="bottom",
+                y=-0.3,
+                xanchor="center",
+                x=0.5,
+                font=dict(color='#333')
+            ),
+            font=dict(color='#333'),
+            paper_bgcolor='rgba(0,0,0,0)',
+            margin=dict(l=40, r=40, t=60, b=100),
+            height=280  # Reduced height from 350 to 280
+        )
+        
+        # Create advance payment distribution chart
+        advance_data = get_session().query(
+            Payment.year,
+            func.sum(Payment.amount).label('amount')
+        ).filter(
+            Payment.payment_type == 'advance',
+            Payment.year > current_year,
+            Payment.date >= start_date,
+            Payment.date <= end_date
+        )
+        
+        # Apply block filter if selected
+        if selected_block and selected_block != "all":
+            advance_data = advance_data.join(Vendor).filter(Vendor.block == selected_block)
+        
+        advance_data = advance_data.group_by(Payment.year).all()
+        
+        df_advance = pd.DataFrame(advance_data, columns=['year', 'amount'])
+        
+        advance_fig = px.bar(
+            df_advance,
+            x='year',
+            y='amount',
+            title='Advance Payments by Future Year',
+            labels={'year': 'Year', 'amount': 'Amount (₦)'},
+            text_auto=True,
+            color_discrete_sequence=['#2c88d9']  # Blue color
+        )
+        advance_fig.update_layout(
+            xaxis=dict(
+                tickmode='linear',
+                dtick=1
+            ),
+            plot_bgcolor='rgba(0,0,0,0)',
+            paper_bgcolor='rgba(0,0,0,0)',
+            yaxis_gridcolor='rgba(0, 0, 0, 0.1)',
+            xaxis_gridcolor='rgba(0, 0, 0, 0.1)',
+            font=dict(color='#333'),
+            margin=dict(l=40, r=40, t=60, b=60),
+            height=280  # Reduced height from 350 to 280
+        )
+        
+        # Calculate total arrears payments (paid and outstanding)
+        total_arrears = paid_arrears + outstanding_arrears
+        total_arrears_formatted = f"₦{total_arrears:,.2f}"
+        
+        return (
+            f"{total_vendors:,}",
+            f"₦{total_collections:,.2f}",
+            total_arrears_formatted,
+            f"₦{advance_payments:,.2f}",
+            trend_fig,
+            status_fig,
+            advance_fig,
+            block_options
+        )
+    except Exception as e:
+        # Log the error for debugging
+        import traceback
+        traceback.print_exc()
+        # Return error indicators to the output components
+        return (
+            f"Error: {e}",
+            f"Error: {e}",
+            f"Error: {e}",
+            f"Error: {e}",
+            go.Figure(), # Return an empty figure
+            go.Figure(), # Return an empty figure
+            go.Figure(), # Return an empty figure
+            [], # Return empty options for the dropdown
+        ) 

@@ -135,6 +135,8 @@ layout = dbc.Container([
                             {"name": "Action", "id": "action"},
                         ],
                         data=[],
+                        page_action='native',
+                        page_current=0,
                         page_size=10,
                         filter_action="native",
                         sort_action="native",
@@ -174,7 +176,6 @@ layout = dbc.Container([
     # Stores for data
     dcc.Store(id="selected-vendor-data"),
     dcc.Store(id="selected-payment-id"),
-    dcc.Store(id="refresh-payment-history", data=0),
 ])
 
 # Add hidden refresh button
@@ -496,7 +497,7 @@ def update_payment_history(process_click, vendor_data, refresh_count):
         Payment, Receipt.payment_id == Payment.id
     )
     
-    # Filter by vendor if viewing specific vendor's history or vendor is selected
+    # Filter by vendor only if vendor_data is available
     if vendor_data:
         query = query.filter(Vendor.id == vendor_data["id"])
     
@@ -553,35 +554,44 @@ def capture_selected_cell(active_cell, table_data):
 def delete_selected_payment(payment_id, refresh_count):
     if not payment_id:
         return dash.no_update, dash.no_update
-    
+
     try:
         # First delete the receipt
         receipt = get_session().query(Receipt).filter_by(payment_id=payment_id).first()
         if receipt:
             get_session().delete(receipt)
-        
+
         # Then delete the payment
         payment = get_session().query(Payment).filter_by(id=payment_id).first()
         if payment:
             get_session().delete(payment)
-        
+
         get_session().commit()
-        
+
         # Return success message and increment refresh counter
-        return dbc.Alert(
-            "Payment record deleted successfully", 
-            color="success",
-            dismissable=True,
-            duration=3000
-        ), refresh_count + 1
-    
+        return (
+            dbc.Alert(
+                "Payment record deleted successfully",
+                color="success",
+                dismissable=True,
+                duration=3000
+            ),
+            refresh_count + 1
+        )
+
     except Exception as e:
         get_session().rollback()
-        return dbc.Alert(
-            f"Error deleting payment: {str(e)}", 
-            color="danger",
-            dismissable=True
-        ), refresh_count
+        # Log the error for debugging
+        import traceback
+        traceback.print_exc()
+        return (
+            dbc.Alert(
+                f"Error deleting payment: {str(e)}",
+                color="danger",
+                dismissable=True
+            ),
+            refresh_count # Return current count on error
+        )
 
 # Callback for exporting payment history to CSV
 @callback(

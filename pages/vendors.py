@@ -165,6 +165,8 @@ layout = dbc.Container([
                             {"name": "Registration Date", "id": "registration_date"},
                         ],
                         data=[],
+                        page_action='native',
+                        page_current=0,
                         page_size=10,
                         filter_action="native",
                         sort_action="native",

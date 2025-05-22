@@ -148,6 +148,9 @@ app.index_string = '''
                 border-color: #2c88d9;
                 box-shadow: 0 0 0 0.2rem rgba(2, 117, 216, 0.25);
             }
+            .logo-col {
+                margin-left: -15px;
+            }
         </style>
     </head>
     <body>
@@ -166,7 +169,7 @@ server = app.server
 
 # Set up SQLAlchemy with SQLite
 DATABASE_URL = 'sqlite:///market_management.db'
-engine = create_engine(DATABASE_URL)
+engine = create_engine(DATABASE_URL, pool_size=10, max_overflow=20, pool_timeout=30)
 db_session = scoped_session(sessionmaker(autocommit=False, autoflush=False, bind=engine))
 Base = declarative_base()
 Base.query = db_session.query_property()
@@ -195,7 +198,7 @@ class Payment(Base):
     __tablename__ = 'payments'
     
     id = Column(Integer, primary_key=True)
-    vendor_id = Column(Integer, ForeignKey('vendors.id', ondelete='CASCADE'), nullable=False)
+    vendor_id = Column(Integer, ForeignKey('vendors.id'), nullable=True)
     amount = Column(Float, nullable=False)
     year = Column(Integer, nullable=False)
     payment_type = Column(String(20), nullable=False)  # regular, arrears, advance
@@ -210,7 +213,7 @@ class Receipt(Base):
     __tablename__ = 'receipts'
     
     id = Column(Integer, primary_key=True)
-    vendor_id = Column(Integer, ForeignKey('vendors.id'), nullable=False)
+    vendor_id = Column(Integer, ForeignKey('vendors.id'), nullable=True)
     issue_date = Column(Date, default=datetime.utcnow().date)
     amount = Column(Float, nullable=False)
     year = Column(Integer, nullable=False)
@@ -261,8 +264,8 @@ app.layout = html.Div([
             # Logo and brand
             html.A(
                 dbc.Row([
-                    dbc.Col(html.Img(src="/assets/logo_new.jpeg", height="40px", style={"border-radius": "5px"})),
-                    dbc.Col(dbc.NavbarBrand("Oyo East LG Market Management System", className="ms-3 fw-bold")),
+                    dbc.Col(html.Img(src="/assets/logo_new.jpeg", height="40px", style={"border-radius": "5px"}), className="logo-col"),
+                    dbc.Col(dbc.NavbarBrand("Oyo East LG Market Management System", className="ms-3 fw-bold text-nowrap")),
                 ], align="center", className="g-0"),
                 href="/",
                 style={"textDecoration": "none"},
@@ -294,6 +297,8 @@ app.layout = html.Div([
         html.Div(id='page-content', className="py-4")
     ], fluid=True, className="pt-3 px-4"),
     
+    dcc.Store(id="refresh-payment-history", data=0),
+
     # Footer
     html.Footer(
         dbc.Container([
@@ -375,10 +380,12 @@ def display_page(pathname):
         ])
 
 if __name__ == '__main__':
+    import os
+
     # Ensure directory structure exists
     os.makedirs('pages', exist_ok=True)
-    
-    # Pre-register all page modules to ensure callbacks are registered
+
+    # Pre-register all page modules
     print("Pre-registering page modules...")
     try:
         import pages.dashboard
@@ -389,6 +396,5 @@ if __name__ == '__main__':
         print("All page modules registered successfully.")
     except Exception as e:
         print(f"Error registering modules: {str(e)}")
-    
-    # Run the app
-    app.run_server(debug=True) 
+
+    app.run_server(host="0.0.0.0",  debug=True)
