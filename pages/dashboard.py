@@ -396,13 +396,12 @@ def update_dashboard(n, start_date, end_date, payment_type, selected_block, refr
         df_trends = pd.merge(all_dates_df, df_trends, on='date', how='left').fillna(0)
         
         # Create trend chart
-        trend_fig = px.bar(
+        trend_fig = px.line(
             df_trends, 
             x='date', 
             y='amount',
             title="Payment Collections",
             labels={'date': 'Date', 'amount': 'Amount (₦)'},
-            text_auto='.2s',
             color_discrete_sequence=['#2c88d9']  # Blue theme color
         )
         trend_fig.update_layout(
@@ -413,7 +412,8 @@ def update_dashboard(n, start_date, end_date, payment_type, selected_block, refr
             xaxis_gridcolor='rgba(0, 0, 0, 0.1)',
             font=dict(color='#333'),
             margin=dict(l=40, r=40, t=60, b=80),
-            height=280  # Reduced height from 350 to 280
+            height=280,
+            yaxis=dict(rangemode='tozero')
         )
         
         # Create payment status chart

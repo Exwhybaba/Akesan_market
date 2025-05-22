@@ -554,31 +554,31 @@ def capture_selected_cell(active_cell, table_data):
 def delete_selected_payment(payment_id, refresh_count):
     if not payment_id:
         return dash.no_update, dash.no_update
-
+    
     try:
         # First delete the receipt
         receipt = get_session().query(Receipt).filter_by(payment_id=payment_id).first()
         if receipt:
             get_session().delete(receipt)
-
+        
         # Then delete the payment
         payment = get_session().query(Payment).filter_by(id=payment_id).first()
         if payment:
             get_session().delete(payment)
-
+        
         get_session().commit()
-
+        
         # Return success message and increment refresh counter
         return (
             dbc.Alert(
-                "Payment record deleted successfully",
-                color="success",
-                dismissable=True,
-                duration=3000
+            "Payment record deleted successfully", 
+            color="success",
+            dismissable=True,
+            duration=3000
             ),
             refresh_count + 1
         )
-
+    
     except Exception as e:
         get_session().rollback()
         # Log the error for debugging
@@ -586,9 +586,9 @@ def delete_selected_payment(payment_id, refresh_count):
         traceback.print_exc()
         return (
             dbc.Alert(
-                f"Error deleting payment: {str(e)}",
-                color="danger",
-                dismissable=True
+            f"Error deleting payment: {str(e)}", 
+            color="danger",
+            dismissable=True
             ),
             refresh_count # Return current count on error
         )

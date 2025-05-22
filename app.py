@@ -397,4 +397,4 @@ if __name__ == '__main__':
     except Exception as e:
         print(f"Error registering modules: {str(e)}")
 
-    app.run_server(host="0.0.0.0",  debug=True)
+    app.run_server(host="127.0.0.1",  debug=False)
