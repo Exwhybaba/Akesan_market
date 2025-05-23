@@ -413,8 +413,11 @@ def update_dashboard(n, start_date, end_date, payment_type, selected_block, refr
             font=dict(color='#333'),
             margin=dict(l=40, r=40, t=60, b=80),
             height=280,
-            yaxis=dict(rangemode='tozero')
+            yaxis=dict(rangemode='tozero', autorange=True)
         )
+        
+        # Debug: Print y-axis layout of trend chart
+        print(f"Trend chart yaxis layout: {trend_fig.layout.yaxis}")
         
         # Create payment status chart
         status_query = get_session().query(
@@ -471,8 +474,12 @@ def update_dashboard(n, start_date, end_date, payment_type, selected_block, refr
             font=dict(color='#333'),
             paper_bgcolor='rgba(0,0,0,0)',
             margin=dict(l=40, r=40, t=60, b=100),
-            height=280  # Reduced height from 350 to 280
+            height=280,  # Reduced height from 350 to 280
+            yaxis=dict(rangemode='tozero', autorange=True)
         )
+        
+        # Debug: Print y-axis layout of status chart (optional, but good for completeness)
+        print(f"Status chart yaxis layout: {status_fig.layout.yaxis}")
         
         # Create advance payment distribution chart
         advance_data = get_session().query(
@@ -513,8 +520,12 @@ def update_dashboard(n, start_date, end_date, payment_type, selected_block, refr
             xaxis_gridcolor='rgba(0, 0, 0, 0.1)',
             font=dict(color='#333'),
             margin=dict(l=40, r=40, t=60, b=60),
-            height=280  # Reduced height from 350 to 280
+            height=280,  # Reduced height from 350 to 280
+            yaxis=dict(rangemode='tozero', autorange=True)
         )
+        
+        # Debug: Print y-axis layout of advance chart
+        print(f"Advance chart yaxis layout: {advance_fig.layout.yaxis}")
         
         # Calculate total arrears payments (paid and outstanding)
         total_arrears = paid_arrears + outstanding_arrears

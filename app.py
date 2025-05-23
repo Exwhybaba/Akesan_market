@@ -244,10 +244,6 @@ class DailyClosing(Base):
     def __repr__(self):
         return f'<Daily Closing {self.date} - ₦{self.total_amount}>'
 
-# Create database tables
-Base.metadata.create_all(bind=engine)
-print("Database tables created successfully.")
-
 # Function to get DB session - used by page modules
 def get_db():
     return db_session
@@ -397,4 +393,4 @@ if __name__ == '__main__':
     except Exception as e:
         print(f"Error registering modules: {str(e)}")
 
-    app.run_server(host="127.0.0.1",  debug=False)
+    app.run_server(host="127.0.0.1",  debug=True)
