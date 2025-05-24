@@ -5,7 +5,7 @@ from datetime import datetime, date
 import os
 
 # Set up SQLAlchemy with SQLite
-DATABASE_URL = 'sqlite:///market_management.db'
+DATABASE_URL = os.environ.get('DATABASE_URL', 'sqlite:///market_management.db')
 engine = create_engine(DATABASE_URL, pool_size=10, max_overflow=20, pool_timeout=30)
 db_session = scoped_session(sessionmaker(autocommit=False, autoflush=False, bind=engine))
 Base = declarative_base()
