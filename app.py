@@ -1,18 +1,25 @@
 import dash
 from dash import html, dcc, Input, Output, State, dash_table
 import dash_bootstrap_components as dbc
-from sqlalchemy import create_engine, Column, Integer, String, Float, ForeignKey, Date, Text, Boolean, func, extract, UniqueConstraint
-from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import relationship, sessionmaker, scoped_session
+# Removed SQLAlchemy imports - now imported from models.py
+# from sqlalchemy import create_engine, Column, Integer, String, Float, ForeignKey, Date, Text, Boolean, func, extract, UniqueConstraint
+# from sqlalchemy.ext.declarative import declarative_base
+# from sqlalchemy.orm import relationship, sessionmaker, scoped_session
 from datetime import datetime, date
 import plotly.express as px
 import plotly.graph_objects as go
 import pandas as pd
 import os
 import importlib
+# Import database objects from models.py
+from models import engine, db_session, Base, Vendor, Payment, Receipt, DailyClosing, get_db
+
+# Create database tables if they don't exist
+# This is moved here to ensure tables are created on Render startup
+Base.metadata.create_all(bind=engine)
 
 # Initialize the Dash app with Bootstrap
-app = dash.Dash(__name__, 
+app = dash.Dash(__name__,
                 external_stylesheets=[dbc.themes.FLATLY],  # Changed from SUPERHERO to FLATLY for a blue and white theme
                 suppress_callback_exceptions=True,
                 meta_tags=[{"name": "viewport", "content": "width=device-width, initial-scale=1"}],
@@ -86,12 +93,12 @@ app.index_string = '''
             }
             .btn:hover {
                 transform: translateY(-2px);
-                box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+                box_shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
             }
             table {
-                box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+                box_shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
                 border-radius: 0.5rem;
-                margin-bottom: 2rem;
+                margin_bottom: 2rem;
             }
             .dash-table-container .dash-spreadsheet-container .dash-spreadsheet-inner th {
                 font-weight: 600;
@@ -108,7 +115,7 @@ app.index_string = '''
                 margin-top: 3rem;
             }
             .js-plotly-plot .plotly .modebar {
-                margin-top: 10px;
+                margin_top: 10px;
             }
             .container-fluid {
                 padding: 2rem;
@@ -149,7 +156,7 @@ app.index_string = '''
                 box-shadow: 0 0 0 0.2rem rgba(2, 117, 216, 0.25);
             }
             .logo-col {
-                margin-left: -15px;
+                margin_left: -15px;
             }
         </style>
     </head>
@@ -167,86 +174,7 @@ app.index_string = '''
 # Initialize server
 server = app.server
 
-# Set up SQLAlchemy with SQLite
-DATABASE_URL = 'sqlite:///market_management.db'
-engine = create_engine(DATABASE_URL, pool_size=10, max_overflow=20, pool_timeout=30)
-db_session = scoped_session(sessionmaker(autocommit=False, autoflush=False, bind=engine))
-Base = declarative_base()
-Base.query = db_session.query_property()
-
-# Define models using SQLAlchemy
-class Vendor(Base):
-    __tablename__ = 'vendors'
-    
-    id = Column(Integer, primary_key=True)
-    name = Column(String(100), nullable=False)
-    shop_number = Column(String(50), nullable=False)
-    block = Column(String(50), nullable=False)
-    registration_date = Column(Date, default=datetime.utcnow().date)
-    
-    # Relationships
-    payments = relationship('Payment', backref='vendor', lazy='dynamic')
-    receipts = relationship('Receipt', backref='vendor', lazy='dynamic')
-    
-    # Constraint to prevent duplicate shop+block combinations
-    __table_args__ = (UniqueConstraint('shop_number', 'block', name='unique_shop_block'),)
-    
-    def __repr__(self):
-        return f'<Vendor {self.name} - Shop {self.shop_number}, Block {self.block}>'
-
-class Payment(Base):
-    __tablename__ = 'payments'
-    
-    id = Column(Integer, primary_key=True)
-    vendor_id = Column(Integer, ForeignKey('vendors.id'), nullable=True)
-    amount = Column(Float, nullable=False)
-    year = Column(Integer, nullable=False)
-    payment_type = Column(String(20), nullable=False)  # regular, arrears, advance
-    date = Column(Date, default=datetime.utcnow().date)
-    time = Column(String(8), default=datetime.utcnow().strftime('%H:%M:%S'))  # Store as HH:MM:SS
-    daily_closing_id = Column(Integer, ForeignKey('daily_closings.id'), nullable=True)
-    
-    def __repr__(self):
-        return f'<Payment ₦{self.amount} - Vendor ID: {self.vendor_id}, Type: {self.payment_type}>'
-
-class Receipt(Base):
-    __tablename__ = 'receipts'
-    
-    id = Column(Integer, primary_key=True)
-    vendor_id = Column(Integer, ForeignKey('vendors.id'), nullable=True)
-    issue_date = Column(Date, default=datetime.utcnow().date)
-    amount = Column(Float, nullable=False)
-    year = Column(Integer, nullable=False)
-    receipt_number = Column(String(50), unique=True, nullable=False)
-    payment_id = Column(Integer, ForeignKey('payments.id'), nullable=False)
-    
-    # Create a relationship back to payment
-    payment = relationship('Payment', backref='receipt', uselist=False)
-    
-    def __repr__(self):
-        return f'<Receipt #{self.receipt_number} - ₦{self.amount}>'
-
-class DailyClosing(Base):
-    __tablename__ = 'daily_closings'
-    
-    id = Column(Integer, primary_key=True)
-    date = Column(Date, default=datetime.utcnow().date, unique=True)
-    total_amount = Column(Float, nullable=False)
-    regular_amount = Column(Float, default=0.0)
-    arrears_amount = Column(Float, default=0.0)
-    advance_amount = Column(Float, default=0.0)
-    notes = Column(Text, nullable=True)
-    is_closed = Column(Boolean, default=True)
-    
-    # Relationships
-    payments = relationship('Payment', backref='daily_closing', lazy='dynamic')
-    
-    def __repr__(self):
-        return f'<Daily Closing {self.date} - ₦{self.total_amount}>'
-
-# Function to get DB session - used by page modules
-def get_db():
-    return db_session
+# Database setup and models are defined in models.py and imported
 
 # Clean up database session when app shuts down
 @server.teardown_appcontext
@@ -275,7 +203,7 @@ app.layout = html.Div([
                     dbc.NavItem(dbc.NavLink([html.I(className="fas fa-money-bill-wave me-2"), "Payments"], href="/payments", active="exact")),
                     dbc.NavItem(dbc.NavLink([html.I(className="fas fa-file-alt me-2"), "Reports"], href="/reports", active="exact")),
                     dbc.NavItem(dbc.NavLink([html.I(className="fas fa-cash-register me-2"), "Daily Closing"], href="/daily-closing", active="exact")),
-                ], 
+                ],
                 className="ms-auto", navbar=True),
                 id="navbar-collapse",
                 navbar=True,
@@ -286,13 +214,13 @@ app.layout = html.Div([
         className="mb-5 shadow-lg",
         sticky="top",
     ),
-    
+
     # Content will be rendered in this container
     dbc.Container([
         dcc.Location(id='url', refresh=False),
         html.Div(id='page-content', className="py-4")
     ], fluid=True, className="pt-3 px-4"),
-    
+
     dcc.Store(id="refresh-payment-history", data=0),
 
     # Footer
@@ -393,4 +321,7 @@ if __name__ == '__main__':
     except Exception as e:
         print(f"Error registering modules: {str(e)}")
 
-    app.run_server(host="127.0.0.1",  debug=True)
+    # This part will run when you execute app.py directly (e.g., for local development)
+    # On Render, the web server typically runs the app differently,
+    # which is why we added Base.metadata.create_all above.
+    app.run_server(host="0.0.0.0",  debug=True)
