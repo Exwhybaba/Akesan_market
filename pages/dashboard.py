@@ -367,7 +367,7 @@ def update_dashboard(n, start_date, end_date, payment_type, selected_block, refr
         
         # Create payment trends chart (for selected date range)
         payment_trends = get_session().query(
-            func.strftime('%Y-%m-%d', Payment.date).label('date'),
+            func.to_char(Payment.date, 'YYYY-MM-DD').label('date'),
             func.sum(Payment.amount).label('amount')
         ).filter(
             Payment.date >= start_date,
@@ -383,7 +383,7 @@ def update_dashboard(n, start_date, end_date, payment_type, selected_block, refr
             payment_trends = payment_trends.join(Vendor).filter(Vendor.block == selected_block)
         
         # Group by date and get results
-        payment_trends = payment_trends.group_by(func.strftime('%Y-%m-%d', Payment.date)).all()
+        payment_trends = payment_trends.group_by(func.to_char(Payment.date, 'YYYY-MM-DD')).all()
         
         # Convert to DataFrame for Plotly
         df_trends = pd.DataFrame(payment_trends, columns=['date', 'amount'])
