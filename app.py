@@ -23,7 +23,8 @@ app = dash.Dash(__name__,
                 external_stylesheets=[dbc.themes.FLATLY],  # Changed from SUPERHERO to FLATLY for a blue and white theme
                 suppress_callback_exceptions=True,
                 meta_tags=[{"name": "viewport", "content": "width=device-width, initial-scale=1"}],
-                assets_folder="assets")
+                assets_folder="assets",
+               use_local_plotlyjs=True)
 
 # Custom CSS for better styling
 app.index_string = '''
@@ -324,4 +325,4 @@ if __name__ == '__main__':
     # This part will run when you execute app.py directly (e.g., for local development)
     # On Render, the web server typically runs the app differently,
     # which is why we added Base.metadata.create_all above.
-    app.run_server(host="0.0.0.0",  debug=True)
+    app.run_server(host="0.0.0.0",  debug=False)
